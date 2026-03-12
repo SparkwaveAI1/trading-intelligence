@@ -1,4 +1,6 @@
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
+// API calls go to /api/* — handled by Vercel serverless functions in production
+// In local dev, proxied via vite to localhost:3001
+const API = ''
 
 export async function getSignals() {
   const r = await fetch(`${API}/api/signals`)
