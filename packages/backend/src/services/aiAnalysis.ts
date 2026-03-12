@@ -43,7 +43,7 @@ interface SignalEvent {
 }
 
 function buildEquityPrompt(signal: SignalEvent): string {
-  const s = signal.symbol ?? signal.assets?.symbol ?? 'Unknown'
+  const s = signal.assets?.symbol ?? 'Unknown'
   const sector = signal.assets?.sector ?? 'Unknown sector'
   return `You are a trading analyst writing a concise signal brief. Be direct, specific, and honest about uncertainty. No fluff.
 

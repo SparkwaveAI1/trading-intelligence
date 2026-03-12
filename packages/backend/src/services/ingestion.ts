@@ -125,13 +125,13 @@ export async function runIngestion(targetDate?: string) {
 }
 
 function getTradingDate(): string {
+  // Free tier only has PRIOR day data — always fetch the previous trading day
   const now = new Date()
-  const etHour = now.getUTCHours() - 5
-  if (etHour < 17) now.setDate(now.getDate() - 1)
-  // Skip weekends
-  const day = now.getDay()
-  if (day === 0) now.setDate(now.getDate() - 2)
-  if (day === 6) now.setDate(now.getDate() - 1)
+  now.setDate(now.getDate() - 1)
+  // Skip weekends: if Sunday roll back to Friday, if Saturday roll back to Friday
+  const day = now.getUTCDay()
+  if (day === 0) now.setDate(now.getDate() - 2) // Sunday → Friday
+  if (day === 6) now.setDate(now.getDate() - 1) // Saturday → Friday
   return now.toISOString().split('T')[0]
 }
 
