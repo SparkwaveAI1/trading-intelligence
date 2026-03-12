@@ -1,94 +1,281 @@
 import { useEffect, useState } from 'react'
-import { getMacro } from '../api'
 
-interface MacroData {
-  snapshot_date: string; regime: string; regime_multiplier: number
-  vix: number; spy_close: number; spy_trend: string; yield_spread_10y2y: number
-  sector_etf_json: Record<string, number> | null
+interface MacroSnapshot {
+  snapshot_date: string
+  regime: string
+  vix_level: number | null
+  spy_rsi: number | null
+  yield_spread: number | null
+  vix_regime: string | null
+  yield_regime: string | null
+  equity_regime: string | null
 }
 
-const REGIME_CONFIG: Record<string, { label: string; color: string; bg: string; desc: string }> = {
-  risk_on:  { label: 'RISK ON',  color: 'text-emerald-300', bg: 'bg-emerald-500/10 border-emerald-500/30', desc: 'Favorable conditions for setups — full context multiplier' },
-  neutral:  { label: 'NEUTRAL',  color: 'text-slate-300',   bg: 'bg-slate-500/10 border-slate-500/30',    desc: 'Normal market — standard scoring applies' },
-  cautious: { label: 'CAUTIOUS', color: 'text-yellow-300',  bg: 'bg-yellow-500/10 border-yellow-500/30',  desc: 'Elevated volatility — signals discounted 15%' },
-  stress:   { label: 'STRESS',   color: 'text-red-300',     bg: 'bg-red-500/10 border-red-500/30',        desc: 'High risk environment — signals discounted 30%' },
+interface MacroCurrent {
+  regime: string
+  vix_level: number | null
+  spy_rsi: number | null
+  yield_spread: number | null
 }
 
-const TREND_ICON: Record<string, string> = { positive: '↑ Uptrend', flat: '→ Flat', negative: '↓ Downtrend' }
+const REGIME_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  risk_on:   { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+  neutral:   { bg: 'bg-blue-500/10',    text: 'text-blue-400',    border: 'border-blue-500/30' },
+  cautious:  { bg: 'bg-yellow-500/10',  text: 'text-yellow-400',  border: 'border-yellow-500/30' },
+  stress:    { bg: 'bg-red-500/10',     text: 'text-red-400',     border: 'border-red-500/30' },
+}
 
-export default function MacroView() {
-  const [macro, setMacro] = useState<MacroData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+function regimeStyle(regime: string | null) {
+  return REGIME_COLORS[regime ?? 'neutral'] ?? REGIME_COLORS.neutral
+}
 
-  useEffect(() => {
-    getMacro()
-      .then(d => { if (d.error) setError(d.error); else setMacro(d) })
-      .finally(() => setLoading(false))
-  }, [])
+// Minimal SVG line chart
+function LineChart({ values, dates, color = '#60a5fa', min: extMin, max: extMax }:
+  { values: (number | null)[]; dates: string[]; color?: string; min?: number; max?: number }) {
+  const clean = values.map(v => v ?? null)
+  const defined = clean.filter(v => v !== null) as number[]
+  if (!defined.length) return <div className="h-20 flex items-center justify-center text-slate-600 text-xs">No data</div>
 
-  if (loading) return <div className="text-slate-400 text-sm">Loading macro data...</div>
-  if (error || !macro) return (
-    <div className="text-slate-500 text-center py-16">
-      <div className="text-3xl mb-3">📊</div>
-      <div className="text-slate-400">No macro data yet</div>
-      <div className="text-sm mt-1">Run the macro regime service after market close</div>
-    </div>
-  )
+  const minV = extMin ?? Math.min(...defined)
+  const maxV = extMax ?? Math.max(...defined)
+  const range = maxV - minV || 1
+  const W = 600, H = 80
 
-  const regime = REGIME_CONFIG[macro.regime] ?? REGIME_CONFIG.neutral
+  const pts = clean.map((v, i) => {
+    if (v === null) return null
+    const x = (i / (clean.length - 1)) * W
+    const y = H - ((v - minV) / range) * H
+    return `${x},${y}`
+  }).filter(Boolean) as string[]
+
+  const fillPath = `0,${H} ${pts.join(' ')} ${W},${H}`
 
   return (
-    <div className="max-w-2xl">
-      <h2 className="text-lg font-semibold mb-4">Macro Regime — {macro.snapshot_date}</h2>
-
-      {/* Regime badge */}
-      <div className={`border rounded-2xl p-6 mb-6 ${regime.bg}`}>
-        <div className={`text-4xl font-black tracking-tight ${regime.color}`}>{regime.label}</div>
-        <div className="text-slate-400 text-sm mt-2">{regime.desc}</div>
-        <div className="mt-3 text-lg font-semibold text-slate-300">
-          Context multiplier: <span className={regime.color}>{macro.regime_multiplier}×</span>
-        </div>
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-20" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={`fill-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={fillPath} fill={`url(#fill-${color.replace('#','')})`} />
+        <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+      </svg>
+      {/* Date labels */}
+      <div className="flex justify-between text-xs text-slate-600 mt-1 px-0.5">
+        <span>{dates[0]?.slice(5)}</span>
+        <span>{dates[Math.floor(dates.length / 2)]?.slice(5)}</span>
+        <span>{dates[dates.length - 1]?.slice(5)}</span>
       </div>
+    </div>
+  )
+}
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-          <div className={`text-2xl font-bold ${macro.vix > 30 ? 'text-red-400' : macro.vix > 20 ? 'text-yellow-400' : 'text-emerald-400'}`}>
-            {macro.vix?.toFixed(1) ?? '—'}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">VIX</div>
-          <div className="text-xs text-slate-400">{macro.vix > 30 ? 'Stress' : macro.vix > 20 ? 'Elevated' : 'Low'}</div>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-          <div className={`text-2xl font-bold ${macro.spy_trend === 'positive' ? 'text-emerald-400' : macro.spy_trend === 'negative' ? 'text-red-400' : 'text-slate-300'}`}>
-            {macro.spy_trend === 'positive' ? '↑' : macro.spy_trend === 'negative' ? '↓' : '→'}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">SPY Trend</div>
-          <div className="text-xs text-slate-400">{TREND_ICON[macro.spy_trend] ?? macro.spy_trend}</div>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-          <div className={`text-2xl font-bold ${macro.yield_spread_10y2y < 0 ? 'text-red-400' : 'text-slate-300'}`}>
-            {macro.yield_spread_10y2y != null ? macro.yield_spread_10y2y.toFixed(2) : '—'}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">10Y-2Y Spread</div>
-          <div className="text-xs text-slate-400">{macro.yield_spread_10y2y < 0 ? 'Inverted' : 'Normal'}</div>
-        </div>
-      </div>
+// Regime timeline (colored blocks)
+function RegimeTimeline({ snapshots }: { snapshots: MacroSnapshot[] }) {
+  if (!snapshots.length) return null
+  return (
+    <div className="flex h-6 rounded-lg overflow-hidden gap-px">
+      {snapshots.map((s, i) => {
+        const style = regimeStyle(s.regime)
+        return (
+          <div
+            key={i}
+            title={`${s.snapshot_date}: ${s.regime}`}
+            className={`flex-1 ${style.bg} cursor-default transition hover:opacity-80`}
+          />
+        )
+      })}
+    </div>
+  )
+}
 
-      {/* Sector ETFs */}
-      {macro.sector_etf_json && Object.keys(macro.sector_etf_json).length > 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">Sector ETFs</div>
-          <div className="grid grid-cols-3 gap-2">
-            {Object.entries(macro.sector_etf_json).map(([sym, price]) => (
-              <div key={sym} className="flex justify-between text-sm">
-                <span className="font-mono text-slate-300">{sym}</span>
-                <span className="text-slate-400">${Number(price).toFixed(2)}</span>
+export default function MacroView() {
+  const [snapshots, setSnapshots] = useState<MacroSnapshot[]>([])
+  const [loading, setLoading] = useState(true)
+  const [days, setDays] = useState(30)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/macro-history?days=${days}`)
+      .then(r => r.json())
+      .then(d => setSnapshots(d.snapshots ?? []))
+      .finally(() => setLoading(false))
+  }, [days])
+
+  const latest = snapshots[snapshots.length - 1] ?? null
+  const latestStyle = regimeStyle(latest?.regime ?? null)
+
+  const dates = snapshots.map(s => s.snapshot_date)
+  const vixValues = snapshots.map(s => s.vix_level)
+  const rsiValues = snapshots.map(s => s.spy_rsi)
+  const spreadValues = snapshots.map(s => s.yield_spread)
+
+  const dayBtns = [14, 30, 60] as const
+
+  if (loading) return <div className="text-slate-400 text-sm">Loading macro data...</div>
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+      {/* Current regime card */}
+      {latest && (
+        <div className={`border rounded-xl p-5 ${latestStyle.bg} ${latestStyle.border}`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">Current Regime</div>
+              <div className={`text-3xl font-black ${latestStyle.text}`}>
+                {latest.regime.replace(/_/g, ' ').toUpperCase()}
               </div>
-            ))}
+              <div className="text-xs text-slate-500 mt-1">as of {latest.snapshot_date}</div>
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className={`text-xl font-bold ${Number(latest.vix_level) > 25 ? 'text-red-400' : 'text-slate-200'}`}>
+                  {latest.vix_level != null ? Number(latest.vix_level).toFixed(1) : '—'}
+                </div>
+                <div className="text-xs text-slate-500">VIX</div>
+              </div>
+              <div>
+                <div className={`text-xl font-bold ${Number(latest.spy_rsi) < 40 ? 'text-orange-400' : Number(latest.spy_rsi) > 60 ? 'text-emerald-400' : 'text-slate-200'}`}>
+                  {latest.spy_rsi != null ? Number(latest.spy_rsi).toFixed(1) : '—'}
+                </div>
+                <div className="text-xs text-slate-500">SPY RSI</div>
+              </div>
+              <div>
+                <div className={`text-xl font-bold ${Number(latest.yield_spread) < 0 ? 'text-red-400' : 'text-slate-200'}`}>
+                  {latest.yield_spread != null ? Number(latest.yield_spread).toFixed(2) : '—'}
+                </div>
+                <div className="text-xs text-slate-500">10Y-2Y</div>
+              </div>
+            </div>
           </div>
+
+          {/* Sub-regimes */}
+          {(latest.vix_regime || latest.yield_regime || latest.equity_regime) && (
+            <div className="flex gap-2 mt-4 flex-wrap">
+              {latest.vix_regime && (
+                <span className="text-xs px-2 py-0.5 bg-black/20 rounded text-slate-400">
+                  VIX: {latest.vix_regime.replace(/_/g, ' ')}
+                </span>
+              )}
+              {latest.yield_regime && (
+                <span className="text-xs px-2 py-0.5 bg-black/20 rounded text-slate-400">
+                  Yield: {latest.yield_regime.replace(/_/g, ' ')}
+                </span>
+              )}
+              {latest.equity_regime && (
+                <span className="text-xs px-2 py-0.5 bg-black/20 rounded text-slate-400">
+                  Equity: {latest.equity_regime.replace(/_/g, ' ')}
+                </span>
+              )}
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Time range toggle */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-300">Historical Data</h3>
+        <div className="flex gap-1 bg-slate-800 rounded-lg p-1">
+          {dayBtns.map(d => (
+            <button key={d} onClick={() => setDays(d)}
+              className={`px-3 py-1 text-xs rounded-md transition ${days === d ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+              {d}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!snapshots.length ? (
+        <div className="text-center py-12 text-slate-500">
+          <div className="text-3xl mb-2">🌐</div>
+          <div>No macro history yet</div>
+          <div className="text-sm mt-1">Populates after first pipeline run at 5:30 PM ET</div>
+        </div>
+      ) : (
+        <>
+          {/* Regime timeline */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <div className="text-xs text-slate-400 uppercase tracking-wider mb-3">Regime Timeline</div>
+            <RegimeTimeline snapshots={snapshots} />
+            <div className="flex gap-3 mt-3 flex-wrap">
+              {Object.entries(REGIME_COLORS).map(([regime, style]) => (
+                <div key={regime} className="flex items-center gap-1.5">
+                  <div className={`w-3 h-3 rounded-sm ${style.bg} border ${style.border}`} />
+                  <span className="text-xs text-slate-500 capitalize">{regime.replace(/_/g,' ')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Charts */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <div className="text-xs text-slate-400 uppercase tracking-wider mb-2">VIX Level</div>
+              <LineChart values={vixValues} dates={dates} color="#f87171" />
+              <div className="flex justify-between text-xs text-slate-500 mt-1">
+                <span>Low: {Math.min(...vixValues.filter(v => v !== null) as number[]).toFixed(1)}</span>
+                <span>High: {Math.max(...vixValues.filter(v => v !== null) as number[]).toFixed(1)}</span>
+              </div>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <div className="text-xs text-slate-400 uppercase tracking-wider mb-2">SPY RSI(14)</div>
+              <LineChart values={rsiValues} dates={dates} color="#60a5fa" min={0} max={100} />
+              <div className="flex justify-between text-xs text-slate-500 mt-1">
+                <span>Oversold &lt;30</span>
+                <span>Overbought &gt;70</span>
+              </div>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <div className="text-xs text-slate-400 uppercase tracking-wider mb-2">Yield Spread (10Y-2Y)</div>
+              <LineChart values={spreadValues} dates={dates} color="#a78bfa" />
+              <div className="flex justify-between text-xs text-slate-500 mt-1">
+                <span>Inverted &lt;0</span>
+                <span>Steepened &gt;0</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="border-b border-slate-800">
+                <tr className="text-xs text-slate-400 uppercase">
+                  <th className="px-4 py-3 text-left">Date</th>
+                  <th className="px-4 py-3 text-left">Regime</th>
+                  <th className="px-4 py-3 text-right">VIX</th>
+                  <th className="px-4 py-3 text-right">SPY RSI</th>
+                  <th className="px-4 py-3 text-right">10Y-2Y</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {[...snapshots].reverse().map(s => {
+                  const style = regimeStyle(s.regime)
+                  return (
+                    <tr key={s.snapshot_date} className="hover:bg-slate-800/30 transition">
+                      <td className="px-4 py-2.5 text-slate-400 text-xs">{s.snapshot_date}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${style.bg} ${style.text}`}>
+                          {s.regime.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-2.5 text-right text-xs ${Number(s.vix_level) > 25 ? 'text-red-400' : 'text-slate-400'}`}>
+                        {s.vix_level != null ? Number(s.vix_level).toFixed(1) : '—'}
+                      </td>
+                      <td className={`px-4 py-2.5 text-right text-xs ${Number(s.spy_rsi) < 40 ? 'text-orange-400' : 'text-slate-400'}`}>
+                        {s.spy_rsi != null ? Number(s.spy_rsi).toFixed(1) : '—'}
+                      </td>
+                      <td className={`px-4 py-2.5 text-right text-xs ${Number(s.yield_spread) < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                        {s.yield_spread != null ? Number(s.yield_spread).toFixed(3) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )
