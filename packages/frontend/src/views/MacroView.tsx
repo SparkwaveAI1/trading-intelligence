@@ -4,18 +4,11 @@ interface MacroSnapshot {
   snapshot_date: string
   regime: string
   vix_level: number | null
-  spy_rsi: number | null
+  spy_trend: string | null
+  spy_close: number | null
   yield_spread: number | null
-  vix_regime: string | null
-  yield_regime: string | null
-  equity_regime: string | null
-}
-
-interface MacroCurrent {
-  regime: string
-  vix_level: number | null
-  spy_rsi: number | null
-  yield_spread: number | null
+  regime_multiplier: number | null
+  sector_etf_json: Record<string, number> | null
 }
 
 const REGIME_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -109,7 +102,6 @@ export default function MacroView() {
 
   const dates = snapshots.map(s => s.snapshot_date)
   const vixValues = snapshots.map(s => s.vix_level)
-  const rsiValues = snapshots.map(s => s.spy_rsi)
   const spreadValues = snapshots.map(s => s.yield_spread)
 
   const dayBtns = [14, 30, 60] as const
@@ -137,10 +129,10 @@ export default function MacroView() {
                 <div className="text-xs text-slate-500">VIX</div>
               </div>
               <div>
-                <div className={`text-xl font-bold ${Number(latest.spy_rsi) < 40 ? 'text-orange-400' : Number(latest.spy_rsi) > 60 ? 'text-emerald-400' : 'text-slate-200'}`}>
-                  {latest.spy_rsi != null ? Number(latest.spy_rsi).toFixed(1) : '—'}
+                <div className={`text-xl font-bold ${latest.spy_trend === 'positive' ? 'text-emerald-400' : latest.spy_trend === 'negative' ? 'text-red-400' : 'text-slate-200'}`}>
+                  {latest.spy_trend ? latest.spy_trend.toUpperCase() : '—'}
                 </div>
-                <div className="text-xs text-slate-500">SPY RSI</div>
+                <div className="text-xs text-slate-500">SPY Trend</div>
               </div>
               <div>
                 <div className={`text-xl font-bold ${Number(latest.yield_spread) < 0 ? 'text-red-400' : 'text-slate-200'}`}>
@@ -151,26 +143,19 @@ export default function MacroView() {
             </div>
           </div>
 
-          {/* Sub-regimes */}
-          {(latest.vix_regime || latest.yield_regime || latest.equity_regime) && (
-            <div className="flex gap-2 mt-4 flex-wrap">
-              {latest.vix_regime && (
-                <span className="text-xs px-2 py-0.5 bg-black/20 rounded text-slate-400">
-                  VIX: {latest.vix_regime.replace(/_/g, ' ')}
-                </span>
-              )}
-              {latest.yield_regime && (
-                <span className="text-xs px-2 py-0.5 bg-black/20 rounded text-slate-400">
-                  Yield: {latest.yield_regime.replace(/_/g, ' ')}
-                </span>
-              )}
-              {latest.equity_regime && (
-                <span className="text-xs px-2 py-0.5 bg-black/20 rounded text-slate-400">
-                  Equity: {latest.equity_regime.replace(/_/g, ' ')}
-                </span>
-              )}
-            </div>
-          )}
+          {/* Sector ETFs + multiplier */}
+          <div className="flex gap-2 mt-4 flex-wrap items-center">
+            {latest.regime_multiplier != null && (
+              <span className="text-xs px-2 py-0.5 bg-black/20 rounded text-slate-400">
+                Signal multiplier: {latest.regime_multiplier}×
+              </span>
+            )}
+            {latest.sector_etf_json && Object.entries(latest.sector_etf_json).slice(0, 5).map(([sym, close]) => (
+              <span key={sym} className="text-xs px-2 py-0.5 bg-black/20 rounded text-slate-500">
+                {sym} ${Number(close).toFixed(2)}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -220,11 +205,16 @@ export default function MacroView() {
               </div>
             </div>
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <div className="text-xs text-slate-400 uppercase tracking-wider mb-2">SPY RSI(14)</div>
-              <LineChart values={rsiValues} dates={dates} color="#60a5fa" min={0} max={100} />
+              <div className="text-xs text-slate-400 uppercase tracking-wider mb-2">SPY Trend</div>
+              {(() => {
+                const trendMap: Record<string, number> = { positive: 2, flat: 1, negative: 0 }
+                const trendValues = snapshots.map(s => s.spy_trend ? (trendMap[s.spy_trend] ?? 1) : null)
+                return <LineChart values={trendValues} dates={dates} color="#60a5fa" min={0} max={2} />
+              })()}
               <div className="flex justify-between text-xs text-slate-500 mt-1">
-                <span>Oversold &lt;30</span>
-                <span>Overbought &gt;70</span>
+                <span>Negative</span>
+                <span>Flat</span>
+                <span>Positive</span>
               </div>
             </div>
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
@@ -245,7 +235,7 @@ export default function MacroView() {
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Regime</th>
                   <th className="px-4 py-3 text-right">VIX</th>
-                  <th className="px-4 py-3 text-right">SPY RSI</th>
+                  <th className="px-4 py-3 text-right">SPY Trend</th>
                   <th className="px-4 py-3 text-right">10Y-2Y</th>
                 </tr>
               </thead>
@@ -263,8 +253,8 @@ export default function MacroView() {
                       <td className={`px-4 py-2.5 text-right text-xs ${Number(s.vix_level) > 25 ? 'text-red-400' : 'text-slate-400'}`}>
                         {s.vix_level != null ? Number(s.vix_level).toFixed(1) : '—'}
                       </td>
-                      <td className={`px-4 py-2.5 text-right text-xs ${Number(s.spy_rsi) < 40 ? 'text-orange-400' : 'text-slate-400'}`}>
-                        {s.spy_rsi != null ? Number(s.spy_rsi).toFixed(1) : '—'}
+                      <td className={`px-4 py-2.5 text-right text-xs ${s.spy_trend === 'positive' ? 'text-emerald-400' : s.spy_trend === 'negative' ? 'text-red-400' : 'text-slate-400'}`}>
+                        {s.spy_trend ?? '—'}
                       </td>
                       <td className={`px-4 py-2.5 text-right text-xs ${Number(s.yield_spread) < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                         {s.yield_spread != null ? Number(s.yield_spread).toFixed(3) : '—'}

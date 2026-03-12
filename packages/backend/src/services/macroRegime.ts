@@ -9,8 +9,9 @@ dotenv.config()
 import { supabase } from '../lib/supabase'
 import { withRetry } from '../lib/retry'
 
-const FRED_BASE = 'https://api.stlouisfed.org/fred'
-const FRED_API_KEY = process.env.FRED_API_KEY ?? 'your_fred_key' // Free, no key required for basic use
+// Yahoo Finance (no key needed, free tier) for yield data
+const YAHOO_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart'
+const YAHOO_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; TradingBot/1.0)' }
 
 // Regime thresholds (from PRD)
 function classifyRegime(vix: number, spyTrend: string, yieldSpread: number): { regime: string, multiplier: number } {
@@ -29,15 +30,22 @@ function classifySpyTrend(close: number, sma20: number): string {
   return 'flat'
 }
 
+async function fetchYield(ticker: string): Promise<number | null> {
+  const url = `${YAHOO_BASE}/${encodeURIComponent(ticker)}?interval=1d&range=5d`
+  const res = await axios.get(url, { headers: YAHOO_HEADERS, timeout: 10000 })
+  const closes: number[] = res.data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []
+  const last = closes.filter(v => v != null).pop()
+  return last ?? null
+}
+
 async function fetchYieldSpread(): Promise<number | null> {
   return withRetry(async () => {
-    // T10Y2Y = 10-year minus 2-year yield spread, FRED series
-    const url = `${FRED_BASE}/series/observations?series_id=T10Y2Y&sort_order=desc&limit=1&file_type=json&api_key=${FRED_API_KEY}`
-    const res = await axios.get(url, { timeout: 10000 })
-    const obs = res.data?.observations
-    if (!obs || obs.length === 0) return null
-    const val = parseFloat(obs[0].value)
-    return isNaN(val) ? null : val
+    // ^TNX = 10-year Treasury yield, ^IRX = 13-week T-bill (proxy for short end)
+    const [y10, y2] = await Promise.all([fetchYield('^TNX'), fetchYield('^IRX')])
+    if (y10 == null || y2 == null) return null
+    // Yields from Yahoo are in percent (e.g. 4.27)
+    // T10Y2Y convention: 10Y minus 2Y, in percent
+    return Math.round((y10 - y2) * 100) / 100
   }, 'fetchYieldSpread')
 }
 
