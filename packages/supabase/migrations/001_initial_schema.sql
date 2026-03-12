@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS equity_bars (
 );
 
 CREATE INDEX idx_equity_bars_symbol_date ON equity_bars(symbol, bar_date DESC);
-CREATE INDEX idx_equity_bars_rsi ON equity_bars(rsi_14) WHERE bar_date > CURRENT_DATE - 30;
+CREATE INDEX idx_equity_bars_rsi ON equity_bars(rsi_14) WHERE rsi_14 IS NOT NULL;
 
 -- Polymarket prediction markets
 CREATE TABLE IF NOT EXISTS polymarket_markets (
