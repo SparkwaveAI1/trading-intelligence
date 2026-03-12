@@ -1,7 +1,7 @@
 /**
  * Market Data Ingestion Service
- * Fetches daily OHLCV bars for S&P 500 + Nasdaq 100 from Polygon.io (free tier)
- * Runs daily after market close (~4:30 PM ET)
+ * Uses Polygon.io grouped daily endpoint — ONE call returns ALL tickers for a date
+ * Free tier: 5 req/min — grouped endpoint = 1 call per day, no rate limit issues
  */
 import axios from 'axios'
 import * as dotenv from 'dotenv'
@@ -12,10 +12,10 @@ import { withRetry } from '../lib/retry'
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY!
 const POLYGON_BASE = 'https://api.polygon.io'
 
-// S&P 500 + Nasdaq 100 — top 150 most liquid symbols
-const EQUITY_UNIVERSE = [
+// S&P 500 + Nasdaq 100 + key ETFs + VIX — filter from grouped response
+const EQUITY_UNIVERSE = new Set([
   // Mag 7 + large cap tech
-  'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA',
+  'AAPL','MSFT','NVDA','AMZN','GOOGL','GOOG','META','TSLA',
   'AVGO','ORCL','ADBE','CRM','AMD','INTC','QCOM','TXN','MU','AMAT',
   // Finance
   'JPM','BAC','WFC','GS','MS','BLK','V','MA','PYPL','AXP','C',
@@ -24,108 +24,117 @@ const EQUITY_UNIVERSE = [
   // Energy
   'XOM','CVX','COP','EOG','SLB','OXY','PSX','VLO','MPC',
   // Consumer
-  'COST','WMT','TGT','HD','LOW','NKE','SBUX','MCD','DPZ','CMG',
+  'COST','WMT','TGT','HD','LOW','NKE','SBUX','MCD','CMG',
   // Industrial
   'CAT','DE','BA','GE','HON','LMT','RTX','NOC',
-  // ETFs (for sector context)
-  'SPY','QQQ','IWM','XLK','SOXX','XLF','XLE','XBI','XLV','XLI','XLC',
-  // More S&P components
-  'BRK.B','PG','KO','PEP','PM','MO','MDLZ','GIS',
-  'DIS','NFLX','CMCSA','T','VZ',
-  'EQIX','AMT','PLD','CCI','WELL',
-  'NEE','DUK','SO','D','AEP',
-  'ACN','IBM','HPQ','DELL','CSCO',
-  'GLD','SLV','TLT','HYG', // ETFs for macro
-  'VIX' // Volatility index
-]
+  // ETFs (sector context + macro)
+  'SPY','QQQ','IWM','DIA','XLK','SOXX','XLF','XLE','XBI','XLV','XLI','XLC','XLU','XLRE',
+  'GLD','SLV','TLT','HYG','LQD',
+  // More S&P
+  'BRK.B','PG','KO','PEP','PM','MO','DIS','NFLX','CMCSA','T','VZ',
+  'NEE','DUK','ACN','IBM','CSCO','DELL',
+])
 
-interface PolygonBar {
-  o: number; h: number; l: number; c: number; v: number;
-  vw?: number; t: number;
+interface GroupedBar {
+  T: string; o: number; h: number; l: number; c: number; v: number; vw?: number; t: number;
 }
 
-async function fetchDailyBars(symbol: string, date: string): Promise<PolygonBar | null> {
+async function fetchGroupedDaily(date: string): Promise<GroupedBar[]> {
   return withRetry(async () => {
-    const url = `${POLYGON_BASE}/v2/aggs/ticker/${symbol}/range/1/day/${date}/${date}?apiKey=${POLYGON_API_KEY}`
+    const url = `${POLYGON_BASE}/v2/aggs/grouped/locale/us/market/stocks/${date}?apiKey=${POLYGON_API_KEY}`
+    const res = await axios.get(url, { timeout: 30000 })
+    if (res.data?.status !== 'OK') throw new Error(`Polygon status: ${res.data?.status}`)
+    return res.data?.results ?? []
+  }, `fetchGroupedDaily:${date}`)
+}
+
+// VIX needs a separate call (it's an index, not a stock)
+async function fetchVIX(date: string): Promise<GroupedBar | null> {
+  return withRetry(async () => {
+    const url = `${POLYGON_BASE}/v2/aggs/ticker/I:VIX/range/1/day/${date}/${date}?apiKey=${POLYGON_API_KEY}`
     const res = await axios.get(url, { timeout: 10000 })
-    const results = res.data?.results
-    if (!results || results.length === 0) return null
-    return results[0]
-  }, `fetchDailyBars:${symbol}:${date}`)
+    const r = res.data?.results?.[0]
+    if (!r) return null
+    return { ...r, T: 'VIX' }
+  }, `fetchVIX:${date}`).catch(() => null)
 }
 
-async function ensureAsset(symbol: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('assets')
-    .upsert({ symbol, active: true }, { onConflict: 'symbol' })
-    .select('id')
-    .single()
-  if (error) { console.error(`ensureAsset ${symbol}:`, error.message); return null }
-  return data.id
-}
+export async function runIngestion(targetDate?: string) {
+  const date = targetDate ?? getTradingDate()
+  console.log(`[ingestion] Starting grouped daily fetch for ${date}`)
 
-async function upsertBar(assetId: string, symbol: string, date: string, bar: PolygonBar) {
-  const { error } = await supabase.from('equity_bars').upsert({
-    asset_id: assetId,
-    symbol,
+  // One API call for all stocks
+  const allBars = await fetchGroupedDaily(date)
+
+  // Filter to our universe
+  const relevant = allBars.filter(b => EQUITY_UNIVERSE.has(b.T))
+  console.log(`[ingestion] Got ${allBars.length} total bars, ${relevant.length} in our universe`)
+
+  // Also fetch VIX (separate index endpoint)
+  const vixBar = await fetchVIX(date)
+  if (vixBar) relevant.push(vixBar)
+
+  let success = 0, failed = 0
+
+  // Batch upsert assets first
+  const symbols = relevant.map(b => b.T)
+  await supabase.from('assets').upsert(
+    symbols.map(s => ({ symbol: s, active: true })),
+    { onConflict: 'symbol' }
+  )
+
+  // Fetch asset IDs
+  const { data: assetRows } = await supabase.from('assets').select('id, symbol').in('symbol', symbols)
+  const assetMap = Object.fromEntries((assetRows ?? []).map(a => [a.symbol, a.id]))
+
+  // Batch upsert bars in chunks of 50
+  const barRows = relevant.map(bar => ({
+    asset_id: assetMap[bar.T] ?? null,
+    symbol: bar.T,
     bar_date: date,
     timeframe: 'day',
     open: bar.o,
     high: bar.h,
     low: bar.l,
     close: bar.c,
-    volume: bar.v,
+    volume: Math.round(bar.v),
     vwap: bar.vw ?? null,
-  }, { onConflict: 'symbol,bar_date,timeframe' })
-  if (error) console.error(`upsertBar ${symbol} ${date}:`, error.message)
-}
+  }))
 
-export async function runIngestion(targetDate?: string) {
-  const date = targetDate ?? getTradingDate()
-  console.log(`[ingestion] Starting for ${date} — ${EQUITY_UNIVERSE.length} symbols`)
-
-  let success = 0, skipped = 0, failed = 0
-
-  for (const symbol of EQUITY_UNIVERSE) {
-    try {
-      const bar = await fetchDailyBars(symbol, date)
-      if (!bar) { skipped++; continue }
-      const assetId = await ensureAsset(symbol)
-      if (!assetId) { failed++; continue }
-      await upsertBar(assetId, symbol, date, bar)
-      success++
-      // Rate limit: Polygon free tier = 5 calls/min
-      await new Promise(r => setTimeout(r, 13000))
-    } catch (err) {
-      console.error(`[ingestion] Failed ${symbol}:`, err)
-      failed++
+  for (let i = 0; i < barRows.length; i += 50) {
+    const chunk = barRows.slice(i, i + 50)
+    const { error } = await supabase.from('equity_bars').upsert(chunk, { onConflict: 'symbol,bar_date,timeframe' })
+    if (error) {
+      console.error(`[ingestion] Batch upsert error (chunk ${i}):`, error.message)
+      failed += chunk.length
+    } else {
+      success += chunk.length
     }
   }
 
-  // Log system event
   await supabase.from('system_events').insert({
     event_type: 'ingestion_complete',
     severity: 'info',
     source: 'polygon',
-    message: `Daily ingestion ${date}: ${success} ok, ${skipped} skipped, ${failed} failed`,
-    details: { date, success, skipped, failed }
+    message: `Grouped daily ingestion ${date}: ${success} ok, ${failed} failed`,
+    details: { date, success, failed, total: relevant.length }
   })
 
-  console.log(`[ingestion] Done: ${success} ok, ${skipped} skipped, ${failed} failed`)
-  return { success, skipped, failed }
+  console.log(`[ingestion] Done: ${success} ok, ${failed} failed`)
+  return { success, failed }
 }
 
 function getTradingDate(): string {
   const now = new Date()
-  // Use yesterday if before 5 PM ET (market not fully settled)
   const etHour = now.getUTCHours() - 5
-  if (etHour < 17) {
-    now.setDate(now.getDate() - 1)
-  }
+  if (etHour < 17) now.setDate(now.getDate() - 1)
+  // Skip weekends
+  const day = now.getDay()
+  if (day === 0) now.setDate(now.getDate() - 2)
+  if (day === 6) now.setDate(now.getDate() - 1)
   return now.toISOString().split('T')[0]
 }
 
-// Run directly
 if (require.main === module) {
   const date = process.argv[2]
   runIngestion(date)
