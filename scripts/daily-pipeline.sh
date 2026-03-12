@@ -34,8 +34,11 @@ npx ts-node src/services/supportResistance.ts "$DATE" 2>&1 | tee -a "$LOG_FILE"
 echo "[4/5] Macro Regime..." | tee -a "$LOG_FILE"
 npx ts-node src/services/macroRegime.ts "$DATE" 2>&1 | tee -a "$LOG_FILE"
 
-echo "[5/5] Signal Detection..." | tee -a "$LOG_FILE"
+echo "[5/5] Signal Detection (equities)..." | tee -a "$LOG_FILE"
 npx ts-node src/services/signalEngine.ts "$DATE" 2>&1 | tee -a "$LOG_FILE"
+
+echo "[6/6] Polymarket..." | tee -a "$LOG_FILE"
+npx ts-node src/services/polymarket.ts 2>&1 | tee -a "$LOG_FILE"
 
 echo "========================================" | tee -a "$LOG_FILE"
 echo "Pipeline complete: $(date)" | tee -a "$LOG_FILE"

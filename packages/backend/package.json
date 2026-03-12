@@ -10,7 +10,8 @@
     "ingest": "ts-node src/services/ingestion.ts",
     "signals": "ts-node src/services/signalEngine.ts",
     "macro": "ts-node src/services/macroRegime.ts",
-    "backfill": "ts-node src/services/backfill.ts"
+    "backfill": "ts-node src/services/backfill.ts",
+    "polymarket": "ts-node src/services/polymarket.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

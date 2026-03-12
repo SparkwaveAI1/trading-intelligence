@@ -3,8 +3,9 @@ import SignalFeed from './views/SignalFeed'
 import Watchlist from './views/Watchlist'
 import MacroView from './views/MacroView'
 import PaperTrades from './views/PaperTrades'
+import PolymarketView from './views/PolymarketView'
 
-type Tab = 'signals' | 'watchlist' | 'macro' | 'trades'
+type Tab = 'signals' | 'watchlist' | 'macro' | 'trades' | 'polymarket'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('signals')
@@ -12,6 +13,7 @@ export default function App() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'signals', label: '⚡ Signals' },
     { id: 'watchlist', label: '📊 Watchlist' },
+    { id: 'polymarket', label: '🎯 Polymarket' },
     { id: 'macro', label: '🌐 Macro' },
     { id: 'trades', label: '📋 Paper Trades' },
   ]
@@ -50,6 +52,7 @@ export default function App() {
       <div className="p-6">
         {tab === 'signals' && <SignalFeed />}
         {tab === 'watchlist' && <Watchlist />}
+        {tab === 'polymarket' && <PolymarketView />}
         {tab === 'macro' && <MacroView />}
         {tab === 'trades' && <PaperTrades />}
       </div>
