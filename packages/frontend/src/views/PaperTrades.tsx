@@ -15,7 +15,12 @@ function outcomeBadge(outcome: string) {
   return 'bg-blue-500/20 text-blue-400' // open
 }
 
-export default function PaperTrades() {
+interface Props {
+  prefilled?: Record<string, unknown> | null
+  onClearPrefilled?: () => void
+}
+
+export default function PaperTrades({ prefilled, onClearPrefilled }: Props) {
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -29,6 +34,17 @@ export default function PaperTrades() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Pre-fill form when navigating from a signal
+  useEffect(() => {
+    if (prefilled) {
+      const asset = prefilled.assets as Record<string, string> | null
+      const sym = asset?.symbol ?? (prefilled.signal_json as Record<string,unknown>)?.ticker as string ?? ''
+      setForm(f => ({ ...f, symbol: sym, notes: `Signal score: ${Number(prefilled.final_score).toFixed(1)} | RSI: ${prefilled.rsi ?? '—'}` }))
+      setShowForm(true)
+      onClearPrefilled?.()
+    }
+  }, [prefilled])
 
   const open = trades.filter(t => t.outcome === 'open')
   const closed = trades.filter(t => t.outcome !== 'open')

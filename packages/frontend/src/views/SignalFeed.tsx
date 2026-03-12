@@ -38,7 +38,9 @@ function regimeChip(regime: string) {
   return map[regime] ?? 'bg-slate-500/20 text-slate-300'
 }
 
-export default function SignalFeed() {
+interface Props { onSelectSignal: (id: string) => void }
+
+export default function SignalFeed({ onSelectSignal }: Props) {
   const [signals, setSignals] = useState<Signal[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -73,7 +75,7 @@ export default function SignalFeed() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {signals.map(s => (
-          <div key={s.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-600 transition">
+          <div key={s.id} onClick={() => onSelectSignal(s.id)} className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 cursor-pointer transition">
             <div className="flex items-start justify-between mb-3">
               <div>
                 <div className="text-xl font-bold text-white">{s.assets?.symbol ?? '—'}</div>
