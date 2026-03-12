@@ -11,7 +11,8 @@
     "signals": "ts-node src/services/signalEngine.ts",
     "macro": "ts-node src/services/macroRegime.ts",
     "backfill": "ts-node src/services/backfill.ts",
-    "polymarket": "ts-node src/services/polymarket.ts"
+    "polymarket": "ts-node src/services/polymarket.ts",
+    "ai": "ts-node src/services/aiAnalysis.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { getSignals } from '../api'
 
+interface Analysis {
+  thesis: string; counter_thesis: string; confirms: string
+  invalidates: string; confidence: string; expected_horizon: string
+}
+
 interface Signal {
   id: string
   signal_type: string
@@ -14,6 +19,7 @@ interface Signal {
   created_at: string
   assets?: { symbol: string; sector?: string }
   signal_json?: Record<string, unknown>
+  analysis_outputs?: Analysis[]
 }
 
 function scoreBadge(score: number) {
@@ -95,7 +101,7 @@ export default function SignalFeed() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap mb-3">
               {s.macro_regime && (
                 <span className={`text-xs px-2 py-0.5 rounded-full ${regimeChip(s.macro_regime)}`}>
                   {s.macro_regime.replace('_', ' ').toUpperCase()}
@@ -110,6 +116,38 @@ export default function SignalFeed() {
                 <span className="text-xs text-slate-500">{s.assets.sector}</span>
               )}
             </div>
+
+            {/* AI Analysis */}
+            {s.analysis_outputs?.[0] ? (
+              <div className="border-t border-slate-800 pt-3 space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-medium text-slate-400">AI Analysis</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                    s.analysis_outputs[0].confidence === 'high' ? 'bg-emerald-500/20 text-emerald-400'
+                    : s.analysis_outputs[0].confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-400'
+                    : 'bg-slate-500/20 text-slate-400'
+                  }`}>{s.analysis_outputs[0].confidence} confidence</span>
+                  {s.analysis_outputs[0].expected_horizon && (
+                    <span className="text-xs text-slate-500">{s.analysis_outputs[0].expected_horizon}</span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-300 leading-relaxed">
+                  <span className="text-emerald-400 font-medium">↑ </span>{s.analysis_outputs[0].thesis}
+                </div>
+                <div className="text-xs text-slate-400 leading-relaxed">
+                  <span className="text-red-400 font-medium">↓ </span>{s.analysis_outputs[0].counter_thesis}
+                </div>
+                {s.analysis_outputs[0].confirms && (
+                  <div className="text-xs text-slate-500">
+                    <span className="text-slate-400">Confirms: </span>{s.analysis_outputs[0].confirms}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="border-t border-slate-800 pt-3 text-xs text-slate-600 italic">
+                AI analysis pending — runs after market close
+              </div>
+            )}
           </div>
         ))}
       </div>
