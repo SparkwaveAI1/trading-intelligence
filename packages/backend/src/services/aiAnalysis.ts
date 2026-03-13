@@ -45,9 +45,12 @@ interface SignalEvent {
 function buildEquityPrompt(signal: SignalEvent): string {
   const s = signal.assets?.symbol ?? 'Unknown'
   const sector = signal.assets?.sector ?? 'Unknown sector'
+  const signalLabel = signal.signal_type === 'capitulation_reversal' ? 'CAPITULATION REVERSAL'
+    : signal.signal_type === 'stress_oversold' ? 'STRESS-REGIME OVERSOLD (broad market selloff, lower vol threshold)'
+    : 'BLOWOFF EXHAUSTION'
   return `You are a trading analyst writing a concise signal brief. Be direct, specific, and honest about uncertainty. No fluff.
 
-SIGNAL: ${signal.signal_type === 'capitulation_reversal' ? 'CAPITULATION REVERSAL' : 'BLOWOFF EXHAUSTION'} on ${s}
+SIGNAL: ${signalLabel} on ${s}
 
 INDICATORS:
 - RSI(14): ${signal.rsi?.toFixed(1) ?? 'N/A'}

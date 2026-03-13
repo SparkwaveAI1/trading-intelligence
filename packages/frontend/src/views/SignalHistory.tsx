@@ -90,7 +90,7 @@ export default function SignalHistory({ onSelectSignal }: Props) {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs text-slate-400">
-                        {s.signal_type === 'capitulation_reversal' ? '📉 Cap' : s.signal_type === 'blowoff_exhaustion' ? '📈 Blow' : '🎯 Edge'}
+                        {s.signal_type === 'capitulation_reversal' ? '📉 Cap' : s.signal_type === 'blowoff_exhaustion' ? '📈 Blow' : s.signal_type === 'stress_oversold' ? '⚠️ Stress' : '🎯 Edge'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">

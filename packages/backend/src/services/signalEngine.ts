@@ -213,6 +213,74 @@ export async function detectSignals(targetDate?: string) {
       }
     }
 
+    // STRESS-REGIME OVERSOLD CHECK
+    // In macro stress, broad selloffs crater RSI without a single-stock vol spike.
+    // Lower thresholds: RSI < 15, vol > 1.1x, macro must be stress or cautious.
+    // Scored separately — lower confidence, labeled as 'stress_oversold'.
+    if (
+      ['stress', 'cautious'].includes(regime) &&
+      bar.rsi_14 < 15 &&
+      Number(bar.volume_ratio) > 1.1
+    ) {
+      // Only fire if not already caught by capitulation check
+      const alreadyFired = signals.some(s => s.includes(symbol))
+      if (!alreadyFired) {
+        const { level: supportLevel, distancePct } = findNearestLevel(close, levels, 'support')
+        const reclaimEvent = detectReclaimEvent(bar)
+
+        const stretchScore = scoreStretch(bar.rsi_14, bar.stoch_k, bar.williams_r, 'oversold')
+        const volumeScore = Math.min(Number(bar.volume_ratio) * 25, 60) // capped lower — vol is weaker signal here
+        const levelScore = supportLevel ? scoreLevelProximity(distancePct, supportLevel.strength) : 0
+        const reclaimScore = reclaimEvent ? 50 : 20
+
+        const rawScore = (stretchScore * 0.35 + volumeScore * 0.20 + levelScore * 0.25 + reclaimScore * 0.20) / 10
+        // Stress regime naturally discounts via regimeMult (0.7)
+        const contextMult = regimeMult * earningsPenalty(null)
+        const finalScore = Math.round(rawScore * contextMult * 10) / 10
+
+        const { data: asset } = await supabase.from('assets').select('id').eq('symbol', symbol).single()
+
+        const signalJson = {
+          ticker: symbol, signal_type: 'stress_oversold',
+          rsi: bar.rsi_14, stoch_k: bar.stoch_k, williams_r: bar.williams_r,
+          volume_ratio: bar.volume_ratio,
+          nearest_level: supportLevel?.price ?? null,
+          level_distance_pct: supportLevel ? distancePct : null,
+          reclaim_event: reclaimEvent, macro_regime: regime,
+          raw_score: rawScore, context_multiplier: contextMult, final_score: finalScore,
+          detected_at: new Date().toISOString()
+        }
+
+        const { data: signalData } = await supabase.from('signal_events').insert({
+          asset_id: asset?.id ?? null,
+          market_type: 'equity', signal_type: 'stress_oversold',
+          rsi: bar.rsi_14, stoch_k: bar.stoch_k, williams_r: bar.williams_r,
+          volume_ratio: bar.volume_ratio,
+          vwap_relation: bar.vwap ? (close > Number(bar.vwap) ? 'above' : 'below') : null,
+          nearest_level_type: supportLevel ? 'support' : null,
+          nearest_level_price: supportLevel?.price ?? null,
+          nearest_level_distance_pct: supportLevel ? distancePct : null,
+          reclaim_event: reclaimEvent,
+          raw_score: rawScore, context_multiplier: contextMult, final_score: finalScore,
+          macro_regime: regime, signal_json: signalJson,
+          expires_at: new Date(Date.now() + 48 * 3600 * 1000).toISOString()
+        }).select('id').single()
+
+        if (signalData) {
+          await supabase.from('setup_scores').insert({
+            signal_event_id: signalData.id,
+            stretch_score: stretchScore, volume_score: volumeScore,
+            level_score: levelScore, reclaim_score: reclaimScore,
+            macro_context_score: regimeMult,
+            raw_score: rawScore, context_multiplier: contextMult, final_score: finalScore
+          })
+        }
+
+        console.log(`[signal] STRESS_OVERSOLD ${symbol} | RSI:${bar.rsi_14?.toFixed(1)} Vol:${Number(bar.volume_ratio).toFixed(2)}x Regime:${regime} | Score:${finalScore}`)
+        signals.push(`STRESS:${symbol}:${finalScore}`)
+      }
+    }
+
     // BLOWOFF EXHAUSTION CHECK
     if (bar.rsi_14 > 80 && bar.volume_ratio > 2) {
       const { level: resistanceLevel, distancePct } = findNearestLevel(close, levels, 'resistance')

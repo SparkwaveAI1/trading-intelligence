@@ -67,7 +67,9 @@ export default function SignalDetail({ signalId, onBack, onLogTrade }: Props) {
           </div>
           <div className="text-sm text-slate-400 mt-1">
             {isEquity
-              ? (isCapitulation ? '📉 Capitulation Reversal' : '📈 Blowoff Exhaustion')
+              ? (isCapitulation ? '📉 Capitulation Reversal'
+                : (signal.signal_type as string) === 'stress_oversold' ? '⚠️ Stress Oversold'
+                : '📈 Blowoff Exhaustion')
               : '🎯 Probability Edge'}
             {' · '}
             {new Date(signal.created_at as string).toLocaleDateString('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}

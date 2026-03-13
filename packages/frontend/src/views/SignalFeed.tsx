@@ -80,7 +80,7 @@ export default function SignalFeed({ onSelectSignal }: Props) {
               <div>
                 <div className="text-xl font-bold text-white">{s.assets?.symbol ?? '—'}</div>
                 <div className="text-xs text-slate-400 mt-0.5">
-                  {s.signal_type === 'capitulation_reversal' ? '📉 CAPITULATION REVERSAL' : '📈 BLOWOFF EXHAUSTION'}
+                  {s.signal_type === 'capitulation_reversal' ? '📉 CAPITULATION REVERSAL' : s.signal_type === 'stress_oversold' ? '⚠️ STRESS OVERSOLD' : '📈 BLOWOFF EXHAUSTION'}
                 </div>
               </div>
               <span className={`text-sm font-bold px-2.5 py-1 rounded-lg ${scoreBadge(s.final_score)}`}>
