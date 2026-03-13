@@ -44,7 +44,7 @@ export default function FundamentalsPanel({ symbol }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`/api/fundamentals?symbol=${symbol}`)
+    fetch(`/api/query?route=fundamentals&symbol=${symbol}`)
       .then(r => r.json())
       .then(setData)
       .catch(() => {})

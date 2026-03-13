@@ -26,7 +26,7 @@ export default function SignalDetail({ signalId, onBack, onLogTrade }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`/api/signals/${signalId}`)
+    fetch(`/api/query?route=signal&id=${signalId}`)
       .then(r => r.json())
       .then(setSignal)
       .finally(() => setLoading(false))

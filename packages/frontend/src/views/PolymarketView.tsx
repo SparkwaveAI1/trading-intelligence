@@ -19,7 +19,7 @@ export default function PolymarketView() {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    fetch('/api/polymarket')
+    fetch('/api/query?route=polymarket')
       .then(r => r.json())
       .then(d => { setMarkets(d.markets ?? []); setSignals(d.signals ?? []) })
       .finally(() => setLoading(false))

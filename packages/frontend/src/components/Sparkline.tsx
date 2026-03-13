@@ -13,7 +13,7 @@ export default function Sparkline({ symbol, width = 120, height = 40, showRSI = 
   const [bars, setBars] = useState<Bar[]>([])
 
   useEffect(() => {
-    fetch(`/api/sparkline?symbol=${symbol}`)
+    fetch(`/api/query?route=sparkline&symbol=${symbol}`)
       .then(r => r.json())
       .then(d => setBars(d.bars ?? []))
       .catch(() => {})

@@ -1,32 +1,28 @@
-// API calls go to /api/* — handled by Vercel serverless functions in production
-// In local dev, proxied via vite to localhost:3001
-const API = ''
+// All API calls go through /api/query?route=X — single serverless function
+const Q = (route: string, params?: Record<string, string>) => {
+  const p = new URLSearchParams({ route, ...params })
+  return `/api/query?${p}`
+}
 
 export async function getSignals() {
-  const r = await fetch(`${API}/api/signals`)
-  return r.json()
+  return fetch(Q('signals')).then(r => r.json())
 }
 export async function getWatchlist() {
-  const r = await fetch(`${API}/api/watchlist`)
-  return r.json()
+  return fetch(Q('watchlist')).then(r => r.json())
 }
 export async function getMacro() {
-  const r = await fetch(`${API}/api/macro`)
-  return r.json()
+  return fetch(Q('macro')).then(r => r.json())
 }
 export async function getPaperTrades() {
-  const r = await fetch(`${API}/api/paper-trades`)
-  return r.json()
+  return fetch(Q('paper-trades')).then(r => r.json())
 }
 export async function createPaperTrade(body: object) {
-  const r = await fetch(`${API}/api/paper-trades`, {
+  return fetch(Q('paper-trades'), {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-  })
-  return r.json()
+  }).then(r => r.json())
 }
 export async function closePaperTrade(id: string, body: object) {
-  const r = await fetch(`${API}/api/paper-trades/${id}`, {
+  return fetch(Q('paper-trade', { id }), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-  })
-  return r.json()
+  }).then(r => r.json())
 }

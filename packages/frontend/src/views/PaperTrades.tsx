@@ -78,7 +78,7 @@ export default function PaperTrades({ prefilled, onClearPrefilled }: Props) {
 
     openTrades.forEach(async (trade) => {
       try {
-        const r = await fetch(`/api/current-price?symbol=${trade.symbol}`)
+        const r = await fetch(`/api/query?route=current-price&symbol=${trade.symbol}`)
         if (!r.ok) return
         const { close, bar_date } = await r.json()
         if (close) {

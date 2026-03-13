@@ -91,7 +91,7 @@ export default function MacroView() {
 
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/macro-history?days=${days}`)
+    fetch(`/api/query?route=macro-history&days=${days}`)
       .then(r => r.json())
       .then(d => setSnapshots(d.snapshots ?? []))
       .finally(() => setLoading(false))

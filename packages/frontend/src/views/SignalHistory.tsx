@@ -27,7 +27,7 @@ export default function SignalHistory({ onSelectSignal }: Props) {
 
   useEffect(() => {
     const q = filter === 'all' ? '' : `&market_type=${filter}`
-    fetch(`/api/signals-history?limit=100${q}`)
+    fetch(`/api/query?route=signals-history&limit=100${q.replace('?','')}`)
       .then(r => r.json())
       .then(d => setSignals(d.signals ?? []))
       .finally(() => setLoading(false))
