@@ -153,10 +153,7 @@ async function routeFundamentals(req, res) {
   const [detailsRes, financialsRes, rangeRes] = await Promise.allSettled([
     axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_KEY}`, { timeout: 10000 }),
     axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&timeframe=quarterly&limit=4&apiKey=${POLYGON_KEY}`, { timeout: 10000 }),
-    (async () => {
-      const { data } = await supabase.from('equity_bars').select('bar_date,high,low,close').eq('symbol',symbol).eq('timeframe','day').order('bar_date',{ascending:false}).limit(60)
-      return data
-    })(),
+    supabase.from('equity_bars').select('bar_date,high,low,close').eq('symbol',symbol).eq('timeframe','day').order('bar_date',{ascending:false}).limit(60).then(r => r.data),
   ])
 
   const details = detailsRes.status === 'fulfilled' ? detailsRes.value.data?.results : null
@@ -207,6 +204,10 @@ export default async function handler(req, res) {
 
   const route = req.query.route
   delete req.query.route
+
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    return res.status(500).json({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_KEY env vars' })
+  }
 
   try {
     switch (route) {
