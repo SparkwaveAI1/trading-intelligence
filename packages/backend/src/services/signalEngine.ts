@@ -1,3 +1,4 @@
+import { getPriorTradingDate } from '../lib/tradingDate'
 /**
  * Signal Engine Service — DETERMINISTIC, NO LLM
  * Detects: Capitulation Reversal + Blowoff Exhaustion
@@ -110,7 +111,7 @@ function detectStallCandle(bar: EquityBar): boolean {
 }
 
 export async function detectSignals(targetDate?: string) {
-  const date = targetDate ?? new Date().toISOString().split('T')[0]
+  const date = targetDate ?? getPriorTradingDate()
   console.log(`[signal-engine] Scanning ${date}`)
 
   // Get today's bars with indicators

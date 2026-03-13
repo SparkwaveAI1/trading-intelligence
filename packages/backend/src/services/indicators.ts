@@ -1,3 +1,4 @@
+import { getPriorTradingDate } from '../lib/tradingDate'
 /**
  * Technical Indicator Computation Service
  * Computes RSI(14), Stochastic %K, Williams %R, SMA20, volume ratio
@@ -96,7 +97,7 @@ export async function computeIndicatorsForSymbol(symbol: string, targetDate: str
 }
 
 export async function runIndicators(targetDate?: string) {
-  const date = targetDate ?? new Date().toISOString().split('T')[0]
+  const date = targetDate ?? getPriorTradingDate()
   console.log(`[indicators] Computing for ${date}`)
 
   // Get all symbols with bars for this date

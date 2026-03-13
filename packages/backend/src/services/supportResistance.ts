@@ -1,3 +1,4 @@
+import { getPriorTradingDate } from '../lib/tradingDate'
 /**
  * Support/Resistance Level Identification
  * Simple algorithm: daily low/high tested 2+ times in last 20 bars
@@ -73,7 +74,7 @@ export async function computeSRLevels(symbol: string) {
 }
 
 export async function runSRComputation(targetDate?: string) {
-  const date = targetDate ?? new Date().toISOString().split('T')[0]
+  const date = targetDate ?? getPriorTradingDate()
   console.log(`[sr] Computing S/R levels for ${date}`)
 
   const { data: todayBars } = await supabase

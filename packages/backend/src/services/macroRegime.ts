@@ -1,3 +1,4 @@
+import { getPriorTradingDate } from '../lib/tradingDate'
 /**
  * Macro Regime Snapshot Service
  * Fetches VIX, SPY trend, yield spread → classifies regime
@@ -50,7 +51,7 @@ async function fetchYieldSpread(): Promise<number | null> {
 }
 
 export async function runMacroRegime(targetDate?: string) {
-  const date = targetDate ?? new Date().toISOString().split('T')[0]
+  const date = targetDate ?? getPriorTradingDate()
   console.log(`[macro] Computing regime for ${date}`)
 
   // Get VIX
