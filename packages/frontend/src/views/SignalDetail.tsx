@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Sparkline from '../components/Sparkline'
 import ScoreBreakdown from '../components/ScoreBreakdown'
+import FundamentalsPanel from '../components/FundamentalsPanel'
 
 interface Props {
   signalId: string
@@ -150,6 +151,9 @@ export default function SignalDetail({ signalId, onBack, onLogTrade }: Props) {
           />
         </div>
       )}
+
+      {/* Fundamentals */}
+      {isEquity && <FundamentalsPanel symbol={symbol} />}
 
       {/* AI Analysis */}
       {analysis ? (
